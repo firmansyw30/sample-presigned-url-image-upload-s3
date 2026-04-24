@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Upload to S3 with Presigned URL</title>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 2rem auto; line-height: 1.5; }
+    #status { margin-top: 1rem; padding: 10px; border-radius: 4px; }
+    .error { background: #fee; color: #b00; }
+    .success { background: #efe; color: #080; }
+  </style>
+</head>
+<body>
+  <h1>Upload Image to S3 with Presigned URL</h1>
+  <form id="uploadForm">
+    <label for="fileInput">Choose an image:</label><br><br>
+    <input type="file" id="fileInput" accept="image/*" required>
+    <button type="submit">Upload</button>
+  </form>
+  
+  <div id="status"></div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const status = document.getElementById('status');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const file = document.getElementById('fileInput').files[0];
+      
+      if (!file) return;
+
+      status.textContent = '🔄 Getting upload permission...';
+      status.className = '';
+
+      try {
+        // 1. Get Pre-signed URL
+        const params = new URLSearchParams({
+          fileName: file.name,
+          fileType: file.type
+        });
+
+        const response = await fetch(`http://localhost:3000/generate-upload-url?${params}`);
+        if (!response.ok) throw new Error('Failed to get signed URL from server.');
+        
+        const { uploadUrl, publicUrl } = await response.json();
+
+        // 2. Upload to S3
+        status.textContent = '🚀 Uploading directly to S3...';
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) throw new Error('S3 Upload failed. Check CORS settings.');
+
+        status.className = 'success';
+        status.innerHTML = `✅ Success! <a href="${publicUrl}" target="_blank">View Image</a>`;
+      } catch (error) {
+        console.error(error);
+        status.className = 'error';
+        status.textContent = `❌ Error: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>
